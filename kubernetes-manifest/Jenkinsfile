@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         // Replace with your ArgoCD ingress/LoadBalancer hostname or IP
-        ARGOCD_SERVER = "34.93.222.197"   
+        ARGOCD_SERVER = "34.93.222.197:80"   
         ARGOCD_TOKEN  = credentials('argocd-token') // Token stored in Jenkins credentials
         APP_NAME      = "my-kustomize-app"     // ArgoCD application name
     }
