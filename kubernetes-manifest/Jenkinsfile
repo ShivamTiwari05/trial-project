@@ -4,49 +4,50 @@ pipeline {
     environment {
         // Replace with your ArgoCD ingress/LoadBalancer hostname or IP
         ARGOCD_SERVER = "34.93.222.197:80"   
-        ARGOCD_TOKEN  = credentials('argocd-token') // Token stored in Jenkins credentials
         APP_NAME      = "my-kustomize-app"     // ArgoCD application name
     }
 
     stages {
         stage('Checkout Code') {
             steps {
-              echo "checkout done"
-                //git branch: 'main', url: 'https://github.com/your-org/your-repo.git'
+                echo "checkout done"
+                // git branch: 'main', url: 'https://github.com/your-org/your-repo.git'
             }
         }
 
         stage('Deploy via ArgoCD') {
             steps {
-                script {
-                    // Install ArgoCD CLI if not already on Jenkins node
-                    sh '''
-                    if command -v argocd >/dev/null 2>&1; then
-                        echo "✅ ArgoCD CLI already installed: $(argocd version --client --short)"
-                    else
-                        echo "⬇️ Installing ArgoCD CLI..."
-                        curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-                        chmod +x argocd
-                        mkdir -p $HOME/bin
-                        mv argocd $HOME/bin/
-                        export PATH=$HOME/bin:$PATH
-                        echo "✅ ArgoCD CLI installed: $(argocd version --client --short)"
-                    fi
-                    '''
+                withCredentials([usernamePassword(credentialsId: 'argocd-username-pass', usernameVariable: 'ARGOCD_USER', passwordVariable: 'ARGOCD_PASS')]) {
+                    script {
+                        // Install ArgoCD CLI if not already on Jenkins node
+                        sh '''
+                        if command -v argocd >/dev/null 2>&1; then
+                            echo "✅ ArgoCD CLI already installed: $(argocd version --client --short)"
+                        else
+                            echo "⬇️ Installing ArgoCD CLI..."
+                            curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+                            chmod +x argocd
+                            mkdir -p $HOME/bin
+                            mv argocd $HOME/bin/
+                            export PATH=$HOME/bin:$PATH
+                            echo "✅ ArgoCD CLI installed: $(argocd version --client --short)"
+                        fi
+                        '''
 
+                        // Login using username & password
+                        sh '''
+                        argocd login $ARGOCD_SERVER \
+                            --username $ARGOCD_USER \
+                            --password $ARGOCD_PASS \
+                            --insecure
+                        '''
 
-                    // Login using token
-                    sh '''
-                    argocd login $ARGOCD_SERVER \
-                        --auth-token $ARGOCD_TOKEN \
-                        --insecure
-                    '''
-
-                    // Sync application
-                    sh '''
-                    argocd app sync $APP_NAME
-                    argocd app wait $APP_NAME --timeout 300
-                    '''
+                        // Sync application
+                        sh '''
+                        argocd app sync $APP_NAME
+                        argocd app wait $APP_NAME --timeout 300
+                        '''
+                    }
                 }
             }
         }
