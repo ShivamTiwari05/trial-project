@@ -1,52 +1,57 @@
 pipeline {
-  agent any
+    agent any
 
-  environment {
-    GIT_CREDENTIALS = 'github-creds'
-    REPO_URL = 'https://github.com/your-org/your-repo.git'
-    KUSTOMIZE_FILE = 'app/kustomization.yaml' // adjust if needed
-    ARGOCD_SERVER = 'argocd.yourdomain.com'  // or localhost:8080 if port-forwarded
-    ARGOCD_APP = 'your-argocd-app-name'
-    ARGOCD_TOKEN = credentials('argocd-token')
-  }
-
-  triggers {
-    githubPush()
-  }
-
-  stages {
-    stage('Checkout Code') {
-      steps {
-        git credentialsId: "${GIT_CREDENTIALS}", url: "${REPO_URL}", branch: 'main'
-      }
+    environment {
+        // Replace with your ArgoCD ingress/LoadBalancer hostname or IP
+        ARGOCD_SERVER = "34.93.222.197"   
+        ARGOCD_TOKEN  = credentials('argocd-token') // Token stored in Jenkins credentials
+        APP_NAME      = "my-kustomize-app"     // ArgoCD application name
     }
 
-    stage('Check if kustomization.yaml Changed') {
-      steps {
-        script {
-          def changes = sh(script: 'git diff --name-only HEAD~1 HEAD', returnStdout: true).trim()
-          if (!changes.contains("${KUSTOMIZE_FILE}")) {
-            echo "No change in ${KUSTOMIZE_FILE}. Skipping ArgoCD deployment."
-            currentBuild.result = 'SUCCESS'
-            skipDeployment = true
-          } else {
-            echo "Change detected in ${KUSTOMIZE_FILE}. Proceeding to trigger ArgoCD sync."
-          }
+    stages {
+        stage('Checkout Code') {
+            steps {
+              echo "checkout done"
+                //git branch: 'main', url: 'https://github.com/your-org/your-repo.git'
+            }
         }
-      }
+
+        stage('Deploy via ArgoCD') {
+            steps {
+                script {
+                    // Install ArgoCD CLI if not already on Jenkins node
+                    sh '''
+                    if ! command -v argocd &> /dev/null; then
+                        echo "Installing ArgoCD CLI..."
+                        curl -sSL -o argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+                        chmod +x argocd
+                        sudo mv argocd /usr/local/bin/
+                    fi
+                    '''
+
+                    // Login using token
+                    sh '''
+                    argocd login $ARGOCD_SERVER \
+                        --auth-token $ARGOCD_TOKEN \
+                        --insecure
+                    '''
+
+                    // Sync application
+                    sh '''
+                    argocd app sync $APP_NAME
+                    argocd app wait $APP_NAME --timeout 300
+                    '''
+                }
+            }
+        }
     }
 
-    stage('Trigger ArgoCD Sync') {
-      when {
-        expression { return !binding.hasVariable('skipDeployment') }
-      }
-      steps {
-        sh '''
-          curl -k -H "Authorization: Bearer ${ARGOCD_TOKEN}" \
-            -X POST https://${ARGOCD_SERVER}/api/v1/applications/${ARGOCD_APP}/sync
-        '''
-        echo "Triggered ArgoCD sync for app: ${ARGOCD_APP}"
-      }
+    post {
+        success {
+            echo "✅ Deployment successful via ArgoCD"
+        }
+        failure {
+            echo "❌ Deployment failed"
+        }
     }
-  }
 }
