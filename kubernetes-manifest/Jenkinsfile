@@ -33,6 +33,13 @@ pipeline {
                             echo "✅ ArgoCD CLI installed: $(argocd version --client --short)"
                         fi
                         '''
+                        sh '''
+                        argocd app create my-kustomize-app \
+                          --repo https://github.com/ShivamTiwari05/trial-project.git \
+                          --path kubernetes-manifest \
+                          --dest-server https://kubernetes.default.svc \
+                          --dest-namespace default
+                        '''
 
                         // Login using username & password
                         sh '''
@@ -40,6 +47,16 @@ pipeline {
                             --username $ARGOCD_USER \
                             --password $ARGOCD_PASS \
                             --insecure
+                        '''
+
+
+                        // to create the application
+                        sh '''
+                        argocd app create my-kustomize-app \
+                          --repo https://github.com/ShivamTiwari05/trial-project.git \
+                          --path kubernetes-manifest \
+                          --dest-server https://kubernetes.default.svc \
+                          --dest-namespace default
                         '''
 
                         // Sync application
